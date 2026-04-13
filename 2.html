@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>网球复盘工具 · 抢七规则最终修复版</title>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        /* 样式与之前完全相同，为了篇幅省略，实际代码中保留所有样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background: linear-gradient(145deg, #1a472a 0%, #0e2a1a 100%);
+            padding: 16px;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            width: 100%;
+            background: #fef9e8;
+            border-radius: 40px;
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+            padding: 20px 24px 28px;
+            transition: all 0.2s;
+        }
+
+        .compact-top {
+            background: #e7dfd0;
+            border-radius: 32px;
+            padding: 12px 18px;
+            margin-bottom: 20px;
+            box-shadow: inset 0 1px 2px rgba(255,255,240,0.8), 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .score-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .total-badge {
+            background: #2d2b26;
+            padding: 4px 16px;
+            border-radius: 60px;
+            color: #f0e6d2;
+            font-weight: bold;
+            display: inline-flex;
+            gap: 12px;
+            flex-shrink: 0;
+            font-size: 0.85rem;
+        }
+        .total-badge span {
+            font-size: 1.1rem;
+        }
+        .total-badge .win {
+            color: #b9f6b0;
+        }
+        .total-badge .loss {
+            color: #ffb4a2;
+        }
+
+        .current-game-compact {
+            background: #4a3e2e;
+            padding: 4px 18px;
+            border-radius: 40px;
+            color: white;
+            display: inline-flex;
+            gap: 16px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+        .current-game-compact span {
+            font-weight: 800;
+            font-size: 1.1rem;
+            margin-left: 4px;
+        }
+        .tiebreak-badge {
+            background: #d4a05a;
+            color: #2c1a0a;
+            padding: 2px 8px;
+            border-radius: 30px;
+            font-size: 0.7rem;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .core-area {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 28px;
+            margin: 0;
+        }
+        .points-grid-wrapper {
+            flex: 3;
+            min-width: 280px;
+            background: #fffaf0;
+            border-radius: 32px;
+            padding: 12px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+            overflow-x: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .game-history-wrapper {
+            flex: 1.6;
+            min-width: 220px;
+            background: #f3ede2;
+            border-radius: 32px;
+            padding: 16px;
+            box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .section-title {
+            font-weight: 700;
+            font-size: 1.3rem;
+            margin-bottom: 14px;
+            color: #2a4b34;
+            border-left: 6px solid #4c8b5e;
+            padding-left: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .match-note-area {
+            background: #f9f3e8;
+            padding: 10px 16px;
+            margin-top: 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: #5a6e4a;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            flex-wrap: wrap;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .match-note-area:hover {
+            background: #f0e6d8;
+        }
+        .match-note-label {
+            font-weight: 600;
+            color: #7c6a50;
+            flex-shrink: 0;
+        }
+        .match-note-text {
+            flex: 1;
+            white-space: normal;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+        .edit-icon {
+            font-size: 0.8rem;
+            opacity: 0.6;
+            flex-shrink: 0;
+            align-self: center;
+        }
+        @media (max-width: 768px) {
+            .match-note-area {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 4px;
+            }
+            .match-note-text {
+                width: 100%;
+            }
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(300px, 1fr));
+            gap: 20px;
+            overflow-x: auto;
+            padding-bottom: 8px;
+        }
+        @media (max-width: 768px) {
+            .games-grid {
+                grid-template-columns: 1fr;
+                overflow-x: visible;
+            }
+            .score-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            .total-badge, .current-game-compact {
+                width: auto;
+            }
+        }
+        @media (max-width: 900px) and (min-width: 769px) {
+            .games-grid { grid-template-columns: repeat(2, minmax(280px, 1fr)); }
+        }
+
+        .game-card {
+            background: white;
+            border-radius: 28px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transition: transform 0.1s;
+        }
+        .game-card:hover {
+            transform: translateY(-2px);
+        }
+        .game-card-header {
+            background: #e8dfcf;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            border-bottom: 2px solid #d4c8b4;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .game-num {
+            font-weight: 800;
+            font-size: 1.2rem;
+            color: #2a4b34;
+        }
+        .game-score-badge {
+            font-weight: 700;
+            font-size: 1rem;
+            background: white;
+            padding: 4px 12px;
+            border-radius: 40px;
+        }
+        .game-score-badge .green { color: #2e7d32; }
+        .game-score-badge .red { color: #c33; }
+        .game-result-badge {
+            font-size: 0.8rem;
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 30px;
+            background: #f0ebe0;
+        }
+        .win-badge { background: #c8e6cf; color: #1f5420; }
+        .loss-badge { background: #ffded9; color: #b13b2c; }
+        .ongoing-badge { background: #fff3e0; color: #b87c2e; }
+        .tiebreak-badge-header {
+            background: #d4a05a;
+            color: #2c1a0a;
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 30px;
+            font-weight: bold;
+        }
+
+        .game-note-area {
+            background: #f9f3e8;
+            padding: 10px 16px;
+            border-top: 1px solid #e8dfcf;
+            font-size: 0.75rem;
+            color: #5a6e4a;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            flex-wrap: wrap;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .game-note-area:hover {
+            background: #f0e6d8;
+        }
+        .game-note-label {
+            font-weight: 600;
+            color: #7c6a50;
+            flex-shrink: 0;
+        }
+        .game-note-text {
+            flex: 1;
+            white-space: normal;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+
+        .points-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.75rem;
+            table-layout: fixed;
+        }
+        .points-table th, .points-table td {
+            padding: 8px 4px;
+            text-align: center;
+            border-bottom: 1px solid #f0e6d8;
+            vertical-align: middle;
+        }
+        .points-table th {
+            background: #f9f3e8;
+            font-weight: 700;
+            color: #5a4a32;
+        }
+        .points-table tr:last-child td {
+            border-bottom: none;
+        }
+        .points-table th:nth-child(1) { width: 40px; }
+        .points-table th:nth-child(2) { width: 70px; }
+        .points-table th:nth-child(3) { width: auto; min-width: 100px; max-width: 150px; }
+        .points-table th:nth-child(4) { width: 55px; }
+        @media (max-width: 768px) {
+            .points-table th:nth-child(3) { min-width: 80px; }
+            .points-table th:nth-child(4) { width: 50px; }
+        }
+
+        .note-cell {
+            cursor: pointer;
+            color: #5a6e4a;
+            font-size: 0.7rem;
+            text-align: left;
+            white-space: normal;
+            word-break: break-word;
+            line-height: 1.3;
+        }
+        .note-cell:hover {
+            background: #f0e6d8;
+        }
+        .action-icons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+            align-items: center;
+        }
+        .action-icon {
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 2px 4px;
+            border-radius: 20px;
+            transition: background 0.1s;
+        }
+        .action-icon:hover {
+            background: #e2d8c8;
+        }
+
+        .score-canvas {
+            display: inline-block;
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            vertical-align: middle;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            flex: 1;
+            overflow-y: auto;
+            max-height: 500px;
+            padding-right: 6px;
+        }
+        .history-item {
+            background: white;
+            border-radius: 20px;
+            padding: 12px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 6px solid;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+        .history-win { border-left-color: #2e7d32; }
+        .history-loss { border-left-color: #c33; }
+        .history-game-num { font-weight: 800; font-size: 1rem; min-width: 70px; }
+        .history-score { font-weight: 700; font-size: 1.2rem; flex: 1; text-align: center; }
+        .history-result { font-size: 0.85rem; font-weight: 600; padding: 4px 12px; border-radius: 30px; background: #f0ebe0; min-width: 60px; text-align: center; }
+        .history-win .history-result { background: #c8e6cf; color: #1f5420; }
+        .history-loss .history-result { background: #ffded9; color: #b13b2c; }
+
+        .toolbar-bottom {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 2px solid #e2d8c8;
+        }
+        .icon-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 10px;
+            justify-items: center;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .icon-btn {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            max-width: 80px;
+            border-radius: 20px;
+            background: radial-gradient(circle at 30% 25%, rgba(255,255,255,0.2) 0%, rgba(0,0,0,0.05) 100%);
+            box-shadow: 0 4px 8px -3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255,255,255,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+            border: none;
+        }
+        .icon-btn:active { transform: translateY(2px); }
+        .btn-green-bg {
+            background: linear-gradient(135deg, #4CAF50, #2E7D32);
+            background-image: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.18) 2%, transparent 2.5%),
+                              radial-gradient(circle at 75% 70%, rgba(255,255,255,0.12) 1.5%, transparent 2%),
+                              linear-gradient(135deg, #4CAF50, #2E7D32);
+            background-size: 26px 26px, 20px 20px, auto;
+            background-blend-mode: overlay;
+        }
+        .btn-red-bg {
+            background: linear-gradient(135deg, #f44336, #c62828);
+            background-image: radial-gradient(circle at 80% 20%, rgba(255,255,255,0.2) 2%, transparent 2.5%),
+                              radial-gradient(circle at 25% 85%, rgba(255,255,255,0.13) 1.8%, transparent 2%),
+                              linear-gradient(135deg, #f44336, #c62828);
+            background-size: 28px 28px, 22px 22px, auto;
+            background-blend-mode: overlay;
+        }
+        .icon-svg-btn {
+            display: block;
+            width: 75%;
+            height: 75%;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.1));
+        }
+        .action-row {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+        }
+        .action-btn {
+            border: none;
+            padding: 6px 14px;
+            border-radius: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.8rem;
+            background: #3f2e1e;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            white-space: nowrap;
+        }
+        .action-btn.save-btn { background: #2c6e4f; }
+        .action-btn.history-btn { background: #5e4b34; }
+        .action-btn.export-btn { background: #4a6a8e; }
+        .action-btn.import-btn { background: #9b6b43; }
+        .action-btn.note-btn { background: #b87c2e; }
+        .action-btn.screenshot-btn { background: #8e6b4a; }
+        .action-btn.tiebreak-btn { background: #d4a05a; color: #2c1a0a; }
+        .action-btn:active { transform: scale(0.96); }
+
+        .footer-note {
+            font-size: 0.7rem;
+            text-align: center;
+            margin-top: 24px;
+            color: #6b5a48;
+        }
+        .empty-message {
+            color: #8f7a60;
+            text-align: center;
+            padding: 30px;
+            grid-column: 1 / -1;
+        }
+        .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+
+        .custom-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .custom-modal-content {
+            background: #fffaf0;
+            border-radius: 32px;
+            max-width: 380px;
+            width: 85%;
+            padding: 20px;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.3);
+        }
+        .custom-modal-title {
+            font-weight: 800;
+            font-size: 1.2rem;
+            margin-bottom: 16px;
+            text-align: center;
+            color: #2a4b34;
+        }
+        .option-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .option-btn {
+            background: #e8dfcf;
+            border: none;
+            padding: 10px 0;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.1s;
+            font-size: 0.9rem;
+        }
+        .option-btn:active { transform: scale(0.97); }
+        .modal-action-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+        }
+        .modal-btn {
+            flex: 1;
+            border: none;
+            padding: 8px 0;
+            border-radius: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .modal-delete {
+            background: #bc4a3c;
+            color: white;
+        }
+        .modal-cancel {
+            background: #9b8b70;
+            color: white;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal {
+            background: #fffaf0;
+            border-radius: 32px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.3);
+        }
+        .modal-header {
+            padding: 16px 20px;
+            background: #e8dfcf;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 800;
+            font-size: 1.2rem;
+            border-bottom: 1px solid #d4c8b4;
+        }
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-close:hover { background: rgba(0,0,0,0.1); }
+        .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+        .saves-list { display: flex; flex-direction: column; gap: 12px; }
+        .save-item {
+            background: white;
+            border-radius: 20px;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid #2c6e4f;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .save-info { flex: 1; }
+        .save-name { font-weight: 700; font-size: 1rem; margin-bottom: 4px; }
+        .save-meta { font-size: 0.7rem; color: #6b5a48; }
+        .save-actions { display: flex; gap: 8px; }
+        .save-btn-small { padding: 6px 12px; border-radius: 30px; border: none; font-weight: 600; cursor: pointer; font-size: 0.75rem; }
+        .load-btn { background: #2c6e4f; color: white; }
+        .delete-btn { background: #bc4a3c; color: white; }
+        .save-btn-small:active { transform: scale(0.95); }
+        .no-saves { text-align: center; color: #8f7a60; padding: 20px; }
+        #fileInput { display: none; }
+    </style>
+</head>
+<body>
+<div class="app-container">
+    <div class="compact-top">
+        <div class="score-row">
+            <div class="total-badge">
+                🏆 总盘分 &nbsp; <span class="win" id="totalGamesWon">0</span> : <span class="loss" id="totalGamesLost">0</span>
+            </div>
+            <div class="current-game-compact">
+                📍 第 <span id="currentGameNum">1</span> 局 &nbsp;|&nbsp;
+                🟢 <span id="currentGreen">0</span> &nbsp;🔴 <span id="currentRed">0</span>
+                <span id="tiebreakIndicator" class="tiebreak-badge" style="display:none;">抢七</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="core-area">
+        <div class="points-grid-wrapper" id="screenshotArea">
+            <div class="section-title">
+                📋 每一分明细表
+            </div>
+            <div id="gamesGrid" class="games-grid">
+                <div class="empty-message">暂无记录，点击下方按钮开始记录</div>
+            </div>
+            <div id="matchNoteDisplay" class="match-note-area" style="display:none;">
+                <span class="match-note-label">📝 整盘备注</span>
+                <span class="match-note-text" id="matchNoteText"></span>
+                <span class="edit-icon">✎</span>
+            </div>
+            <div class="toolbar-bottom">
+                <div class="icon-grid" id="iconButtonGrid"></div>
+                <div class="action-row">
+                    <button id="undoBtn" class="action-btn" style="background:#5e4b34;">↩️ 撤销</button>
+                    <button id="resetBtn" class="action-btn" style="background:#3f2e1e;">🔄 重置</button>
+                    <button id="tiebreakBtn" class="action-btn tiebreak-btn">🏆 抢七</button>
+                    <button id="noteLastBtn" class="action-btn note-btn">📝 备注上一分</button>
+                    <button id="editMatchNoteBtn" class="action-btn" style="background:#8e6b4a;">📝 盘备注</button>
+                    <button id="saveBtn" class="action-btn save-btn">💾 保存比赛</button>
+                    <button id="historySavesBtn" class="action-btn history-btn">📁 历史记录</button>
+                    <button id="exportBtn" class="action-btn export-btn">📤 导出数据</button>
+                    <button id="importBtn" class="action-btn import-btn">📂 导入数据</button>
+                    <button id="screenshotBtn" class="action-btn screenshot-btn">📸 导出图片</button>
+                </div>
+                <input type="file" id="fileInput" accept=".json" style="display: none;">
+            </div>
+        </div>
+
+        <div class="game-history-wrapper">
+            <div class="section-title">
+                🏅 每局小分回顾
+                <span style="font-size:0.7rem;">(完赛局)</span>
+            </div>
+            <div id="historyList" class="history-list">
+                <div class="empty-message">暂无完赛局</div>
+            </div>
+        </div>
+    </div>
+    <div class="footer-note">
+        ✅ 绿色 = 获胜分 &nbsp;&nbsp;🔴 红色 = 丢分<br>
+        ● 圆形 / ✓ 对勾 / ✘ 叉 代表满意度 &nbsp;|&nbsp; 📝 点击备注可编辑 &nbsp;|&nbsp; 🖱️ 点击得分图标可编辑/删除 &nbsp;|&nbsp; ➕插入一分<br>
+        🧩 常规局先得4分获胜；抢七局先得7分且领先2分获胜。<br>
+        💾 保存到浏览器 &nbsp;📁 历史记录（弹窗） &nbsp;📤 导出数据 &nbsp;📂 导入数据 &nbsp;📸 导出图片
+    </div>
+</div>
+
+<script>
+    // ---------- 全局数据 ----------
+    let pointsLog = [];
+    let globalPointId = 0;
+    let gameNotes = {};
+    let matchNote = "";
+    let nextIsTiebreak = false;
+
+    let currentGameNumber = 1;
+    let currentGameGreen = 0;
+    let currentGameRed = 0;
+    let totalGamesWon = 0;
+    let totalGamesLost = 0;
+    let completedGames = [];
+
+    const totalGamesWonSpan = document.getElementById('totalGamesWon');
+    const totalGamesLostSpan = document.getElementById('totalGamesLost');
+    const currentGameNumSpan = document.getElementById('currentGameNum');
+    const currentGreenSpan = document.getElementById('currentGreen');
+    const currentRedSpan = document.getElementById('currentRed');
+    const tiebreakIndicator = document.getElementById('tiebreakIndicator');
+    const gamesGrid = document.getElementById('gamesGrid');
+    const historyListDiv = document.getElementById('historyList');
+    const undoBtn = document.getElementById('undoBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const tiebreakBtn = document.getElementById('tiebreakBtn');
+    const noteLastBtn = document.getElementById('noteLastBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const historySavesBtn = document.getElementById('historySavesBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const screenshotBtn = document.getElementById('screenshotBtn');
+    const fileInput = document.getElementById('fileInput');
+    const editMatchNoteBtn = document.getElementById('editMatchNoteBtn');
+    const matchNoteDisplay = document.getElementById('matchNoteDisplay');
+    const matchNoteTextSpan = document.getElementById('matchNoteText');
+
+    const STORAGE_KEY = 'tennis_match_saves';
+
+    // ---------- 截图功能 ----------
+    async function captureScreenshot() {
+        const element = document.getElementById('screenshotArea');
+        if (!element) return;
+        const originalBtnText = screenshotBtn.innerText;
+        screenshotBtn.innerText = '📸 生成中...';
+        screenshotBtn.disabled = true;
+        try {
+            const canvas = await html2canvas(element, {
+                scale: 2,
+                backgroundColor: '#fffaf0',
+                logging: false,
+                useCORS: false,
+                allowTaint: false
+            });
+            const link = document.createElement('a');
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+            link.download = `tennis_details_${timestamp}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        } catch (err) {
+            console.error('截图失败:', err);
+            alert('截图生成失败，请重试或检查网络。');
+        } finally {
+            screenshotBtn.innerText = originalBtnText;
+            screenshotBtn.disabled = false;
+        }
+    }
+
+    // ---------- 整盘备注 ----------
+    function editMatchNote() {
+        const newNote = prompt('编辑整盘备注（可留空）:', matchNote);
+        if (newNote === null) return;
+        matchNote = newNote.trim();
+        updateMatchNoteDisplay();
+    }
+
+    function updateMatchNoteDisplay() {
+        if (matchNote && matchNote.trim() !== '') {
+            matchNoteTextSpan.innerText = matchNote;
+            matchNoteDisplay.style.display = 'flex';
+        } else {
+            matchNoteDisplay.style.display = 'none';
+        }
+    }
+
+    // ---------- 抢七逻辑：设置下一局为抢七 ----------
+    function startTiebreak() {
+        if (currentGameGreen !== 0 || currentGameRed !== 0) {
+            alert('当前局未结束，无法开始抢七。请先完成当前局。');
+            return;
+        }
+        if (nextIsTiebreak) {
+            alert('下一局已经是抢七局，无需重复设置。');
+            return;
+        }
+        nextIsTiebreak = true;
+        alert('下一局将变为抢七局（先得7分且领先2分获胜）。');
+        syncAllFromLog();
+    }
+
+    function isTiebreakFinished(green, red) {
+        if (green >= 7 || red >= 7) {
+            const diff = Math.abs(green - red);
+            return diff >= 2;
+        }
+        return false;
+    }
+
+    // ---------- localStorage 操作 ----------
+    function getSaves() {
+        const saves = localStorage.getItem(STORAGE_KEY);
+        return saves ? JSON.parse(saves) : [];
+    }
+
+    function saveSaves(saves) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(saves));
+    }
+
+    function saveCurrentMatch() {
+        const defaultName = `比赛_${new Date().toLocaleString()}`;
+        let name = prompt('请输入本次比赛的名称（用于日后加载）:', defaultName);
+        if (!name || name.trim() === '') return;
+        name = name.trim();
+        const saves = getSaves();
+        const newSave = {
+            id: Date.now(),
+            name: name,
+            timestamp: new Date().toISOString(),
+            pointsLog: pointsLog,
+            globalPointId: globalPointId,
+            gameNotes: gameNotes,
+            matchNote: matchNote,
+            nextIsTiebreak: nextIsTiebreak
+        };
+        saves.push(newSave);
+        saveSaves(saves);
+        alert(`✅ 比赛已保存为“${name}”`);
+    }
+
+    function showHistoryModal() {
+        const saves = getSaves();
+        const modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        
+        let bodyHtml = '';
+        if (saves.length === 0) {
+            bodyHtml = '<div class="no-saves">暂无保存的比赛记录</div>';
+        } else {
+            let itemsHtml = '';
+            saves.forEach(save => {
+                const dateStr = new Date(save.timestamp).toLocaleString();
+                itemsHtml += `
+                    <div class="save-item" data-id="${save.id}">
+                        <div class="save-info">
+                            <div class="save-name">${escapeHtml(save.name)}</div>
+                            <div class="save-meta">${dateStr} · ${save.pointsLog.length}分</div>
+                        </div>
+                        <div class="save-actions">
+                            <button class="save-btn-small load-btn" data-id="${save.id}">加载</button>
+                            <button class="save-btn-small delete-btn" data-id="${save.id}">删除</button>
+                        </div>
+                    </div>
+                `;
+            });
+            bodyHtml = `<div class="saves-list">${itemsHtml}</div>`;
+        }
+        
+        modal.innerHTML = `
+            <div class="modal">
+                <div class="modal-header">
+                    <span>📋 已保存的比赛</span>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    ${bodyHtml}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        const closeBtn = modal.querySelector('.modal-close');
+        closeBtn.addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+        
+        modal.querySelectorAll('.load-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.getAttribute('data-id'));
+                const save = saves.find(s => s.id === id);
+                if (save) {
+                    loadMatch(save);
+                    modal.remove();
+                }
+            });
+        });
+        
+        modal.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const id = parseInt(btn.getAttribute('data-id'));
+                const newSaves = saves.filter(s => s.id !== id);
+                saveSaves(newSaves);
+                modal.remove();
+                showHistoryModal();
+            });
+        });
+    }
+    
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+    
+    function loadMatch(save) {
+        pointsLog = save.pointsLog;
+        globalPointId = save.globalPointId;
+        gameNotes = save.gameNotes || {};
+        matchNote = save.matchNote || "";
+        nextIsTiebreak = save.nextIsTiebreak || false;
+        pointsLog.forEach(p => { if (p.note === undefined) p.note = ''; });
+        updateMatchNoteDisplay();
+        syncAllFromLog();
+        alert(`✅ 已加载比赛“${save.name}”`);
+    }
+    
+    function exportToJSON() {
+        const exportData = {
+            version: "1.6",
+            exportDate: new Date().toISOString(),
+            pointsLog: pointsLog,
+            globalPointId: globalPointId,
+            gameNotes: gameNotes,
+            matchNote: matchNote,
+            nextIsTiebreak: nextIsTiebreak
+        };
+        const jsonStr = JSON.stringify(exportData, null, 2);
+        const blob = new Blob([jsonStr], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+        a.download = `tennis_match_${timestamp}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        alert(`📤 已导出比赛数据，包含 ${pointsLog.length} 分`);
+    }
+    
+    function importFromJSON(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const jsonData = JSON.parse(e.target.result);
+                if (!jsonData.hasOwnProperty('pointsLog') || !jsonData.hasOwnProperty('globalPointId')) {
+                    throw new Error('文件格式不正确：缺少必要字段');
+                }
+                if (!Array.isArray(jsonData.pointsLog)) throw new Error('pointsLog 必须是数组');
+                for (let point of jsonData.pointsLog) {
+                    if (!point.hasOwnProperty('id') || !point.hasOwnProperty('color') || !point.hasOwnProperty('satisfaction')) {
+                        throw new Error('记录格式不正确');
+                    }
+                    if (point.color !== 'green' && point.color !== 'red') throw new Error('color 必须是 green 或 red');
+                    if (!['check', 'circle', 'cross'].includes(point.satisfaction)) throw new Error('satisfaction 必须是 check, circle, cross 之一');
+                    if (point.note === undefined) point.note = '';
+                }
+                pointsLog = jsonData.pointsLog;
+                globalPointId = jsonData.globalPointId;
+                gameNotes = jsonData.gameNotes || {};
+                matchNote = jsonData.matchNote || "";
+                nextIsTiebreak = jsonData.nextIsTiebreak || false;
+                updateMatchNoteDisplay();
+                syncAllFromLog();
+                alert(`✅ 成功导入比赛数据，包含 ${pointsLog.length} 分`);
+            } catch (err) {
+                alert(`❌ 导入失败: ${err.message}`);
+                console.error(err);
+            }
+        };
+        reader.onerror = () => alert('读取文件失败');
+        reader.readAsText(file);
+    }
+    
+    // 绘制得分图标 (canvas)
+    function drawScoreIcon(canvas, color, satisfaction) {
+        const ctx = canvas.getContext('2d');
+        const size = 32;
+        canvas.width = size;
+        canvas.height = size;
+        const radius = 8;
+        ctx.clearRect(0, 0, size, size);
+        let grad;
+        if (color === 'green') {
+            grad = ctx.createLinearGradient(0, 0, size, size);
+            grad.addColorStop(0, '#4CAF50');
+            grad.addColorStop(1, '#2E7D32');
+        } else {
+            grad = ctx.createLinearGradient(0, 0, size, size);
+            grad.addColorStop(0, '#f44336');
+            grad.addColorStop(1, '#c62828');
+        }
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.roundRect(0, 0, size, size, radius);
+        ctx.fill();
+        ctx.strokeStyle = 'white';
+        ctx.fillStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        const center = size / 2;
+        if (satisfaction === 'check') {
+            ctx.beginPath();
+            ctx.moveTo(10, 17);
+            ctx.lineTo(15, 22);
+            ctx.lineTo(24, 12);
+            ctx.stroke();
+        } else if (satisfaction === 'circle') {
+            ctx.beginPath();
+            ctx.arc(center, center, 9, 0, 2 * Math.PI);
+            ctx.fill();
+        } else if (satisfaction === 'cross') {
+            ctx.beginPath();
+            ctx.moveTo(10, 10);
+            ctx.lineTo(22, 22);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(22, 10);
+            ctx.lineTo(10, 22);
+            ctx.stroke();
+        }
+    }
+    
+    if (!CanvasRenderingContext2D.prototype.roundRect) {
+        CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            this.moveTo(x+r, y);
+            this.lineTo(x+w-r, y);
+            this.quadraticCurveTo(x+w, y, x+w, y+r);
+            this.lineTo(x+w, y+h-r);
+            this.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+            this.lineTo(x+r, y+h);
+            this.quadraticCurveTo(x, y+h, x, y+h-r);
+            this.lineTo(x, y+r);
+            this.quadraticCurveTo(x, y, x+r, y);
+            return this;
+        };
+    }
+    
+    function getPointIconHTML(pointId) {
+        return `<canvas class="score-canvas score-cell" data-point-id="${pointId}" width="32" height="32" style="width:32px;height:32px;"></canvas>`;
+    }
+    
+    function drawAllScoreIcons() {
+        document.querySelectorAll('.score-canvas').forEach(canvas => {
+            const pointId = parseInt(canvas.getAttribute('data-point-id'));
+            const point = pointsLog.find(p => p.id === pointId);
+            if (point) {
+                drawScoreIcon(canvas, point.color, point.satisfaction);
+            }
+        });
+    }
+    
+    // 自定义模态框编辑得分
+    function showEditModal(pointId) {
+        const point = pointsLog.find(p => p.id === pointId);
+        if (!point) return;
+        const options = [
+            { color: 'green', satisfaction: 'check', label: '🟢 ✅ 获胜·非常满意' },
+            { color: 'green', satisfaction: 'circle', label: '🟢 ● 获胜·基本满意' },
+            { color: 'green', satisfaction: 'cross', label: '🟢 ✘ 获胜·不满意' },
+            { color: 'red', satisfaction: 'check', label: '🔴 ✅ 丢分·发挥还行' },
+            { color: 'red', satisfaction: 'circle', label: '🔴 ● 丢分·普通失误' },
+            { color: 'red', satisfaction: 'cross', label: '🔴 ✘ 丢分·严重失误' }
+        ];
+        
+        const modalDiv = document.createElement('div');
+        modalDiv.className = 'custom-modal';
+        let optionsHtml = '';
+        options.forEach((opt, idx) => {
+            optionsHtml += `<button class="option-btn" data-opt-index="${idx}">${opt.label}</button>`;
+        });
+        modalDiv.innerHTML = `
+            <div class="custom-modal-content">
+                <div class="custom-modal-title">编辑第 ${point.id} 分</div>
+                <div class="option-buttons">
+                    ${optionsHtml}
+                </div>
+                <div class="modal-action-buttons">
+                    <button class="modal-btn modal-delete" id="deletePointBtn">🗑️ 删除</button>
+                    <button class="modal-btn modal-cancel" id="cancelEditBtn">取消</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modalDiv);
+        
+        const handleOption = (idx) => {
+            const selected = options[idx];
+            point.color = selected.color;
+            point.satisfaction = selected.satisfaction;
+            syncAllFromLog();
+            modalDiv.remove();
+        };
+        
+        modalDiv.querySelectorAll('.option-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(btn.getAttribute('data-opt-index'));
+                handleOption(idx);
+            });
+        });
+        
+        modalDiv.querySelector('#deletePointBtn').addEventListener('click', () => {
+            if (confirm(`确定要删除第 ${point.id} 分吗？此操作不可撤销。`)) {
+                const index = pointsLog.findIndex(p => p.id === pointId);
+                if (index !== -1) pointsLog.splice(index, 1);
+                if (pointsLog.length === 0) globalPointId = 0;
+                syncAllFromLog();
+            }
+            modalDiv.remove();
+        });
+        
+        modalDiv.querySelector('#cancelEditBtn').addEventListener('click', () => {
+            modalDiv.remove();
+        });
+        
+        modalDiv.addEventListener('click', (e) => {
+            if (e.target === modalDiv) modalDiv.remove();
+        });
+    }
+    
+    function insertPointBefore(pointId) {
+        const index = pointsLog.findIndex(p => p.id === pointId);
+        if (index === -1) return;
+        const options = [
+            { color: 'green', satisfaction: 'check', label: '🟢 ✅ 获胜·非常满意' },
+            { color: 'green', satisfaction: 'circle', label: '🟢 ● 获胜·基本满意' },
+            { color: 'green', satisfaction: 'cross', label: '🟢 ✘ 获胜·不满意' },
+            { color: 'red', satisfaction: 'check', label: '🔴 ✅ 丢分·发挥还行' },
+            { color: 'red', satisfaction: 'circle', label: '🔴 ● 丢分·普通失误' },
+            { color: 'red', satisfaction: 'cross', label: '🔴 ✘ 丢分·严重失误' }
+        ];
+        const choice = prompt(`在第 ${pointId} 分之前插入新得分:\n` + options.map((opt, idx) => `${idx+1}. ${opt.label}`).join('\n') + '\n\n请输入数字 1-6：');
+        const num = parseInt(choice);
+        if (isNaN(num) || num < 1 || num > 6) return;
+        const selected = options[num-1];
+        globalPointId++;
+        let currentTiebreak = false;
+        for (let i = index-1; i >= 0; i--) {
+            if (pointsLog[i]) {
+                currentTiebreak = pointsLog[i].tiebreak;
+                break;
+            }
+        }
+        if (pointsLog[index] && currentTiebreak === undefined) {
+            currentTiebreak = pointsLog[index].tiebreak;
+        }
+        const newPoint = {
+            id: globalPointId,
+            color: selected.color,
+            satisfaction: selected.satisfaction,
+            note: '',
+            tiebreak: currentTiebreak || false
+        };
+        pointsLog.splice(index, 0, newPoint);
+        syncAllFromLog();
+    }
+    
+    function editPointNote(pointId) {
+        const point = pointsLog.find(p => p.id === pointId);
+        if (!point) return;
+        const newNote = prompt('编辑本条记录的备注：', point.note || '');
+        if (newNote === null) return;
+        point.note = newNote.trim();
+        syncAllFromLog();
+    }
+    
+    function editGameNote(gameNumber) {
+        const currentNote = gameNotes[gameNumber] || '';
+        const newNote = prompt(`编辑第 ${gameNumber} 局的备注：`, currentNote);
+        if (newNote === null) return;
+        gameNotes[gameNumber] = newNote.trim();
+        syncAllFromLog();
+    }
+    
+    function rebuildFromPoints() {
+        let simGameNum = 1;
+        let simGreen = 0;
+        let simRed = 0;
+        let simCompleted = [];
+        let simTotalWon = 0;
+        let simTotalLost = 0;
+        let gamesDetails = [];
+
+        let currentGamePoints = [];
+        let pointCounter = 0;
+        let currentTiebreak = false;
+
+        for (let i = 0; i < pointsLog.length; i++) {
+            const point = pointsLog[i];
+            if (currentGamePoints.length === 0) {
+                currentTiebreak = point.tiebreak || false;
+            }
+            pointCounter++;
+            currentGamePoints.push({ 
+                seq: pointCounter, 
+                id: point.id,
+                color: point.color, 
+                satisfaction: point.satisfaction,
+                note: point.note || ''
+            });
+            if (point.color === 'green') simGreen++;
+            else simRed++;
+
+            let gameFinished = false;
+            if (currentTiebreak) {
+                if (isTiebreakFinished(simGreen, simRed)) {
+                    gameFinished = true;
+                }
+            } else {
+                if (simGreen === 4 || simRed === 4) {
+                    gameFinished = true;
+                }
+            }
+
+            if (gameFinished) {
+                gamesDetails.push({
+                    gameNumber: simGameNum,
+                    points: [...currentGamePoints],
+                    finalGreen: simGreen,
+                    finalRed: simRed,
+                    resultWin: simGreen > simRed,
+                    isTiebreak: currentTiebreak
+                });
+                simCompleted.push({ gameNumber: simGameNum, resultWin: simGreen > simRed, finalGreen: simGreen, finalRed: simRed });
+                if (simGreen > simRed) simTotalWon++;
+                else simTotalLost++;
+                simGameNum++;
+                simGreen = 0; simRed = 0;
+                currentGamePoints = [];
+                pointCounter = 0;
+            }
+        }
+
+        if (currentGamePoints.length > 0) {
+            gamesDetails.push({
+                gameNumber: simGameNum,
+                points: [...currentGamePoints],
+                finalGreen: simGreen,
+                finalRed: simRed,
+                resultWin: null,
+                isOngoing: true,
+                isTiebreak: currentTiebreak
+            });
+        }
+
+        currentGameNumber = simGameNum;
+        currentGameGreen = simGreen;
+        currentGameRed = simRed;
+        totalGamesWon = simTotalWon;
+        totalGamesLost = simTotalLost;
+        completedGames = simCompleted;
+
+        return gamesDetails;
+    }
+
+    function renderGamesGrid(gamesDetails) {
+        if (!gamesDetails || gamesDetails.length === 0) {
+            gamesGrid.innerHTML = '<div class="empty-message">暂无记录，点击下方按钮开始记录</div>';
+            return;
+        }
+
+        let html = '';
+        for (let game of gamesDetails) {
+            const isCompleted = game.resultWin !== null;
+            const resultText = isCompleted ? (game.resultWin ? '胜局' : '负局') : '进行中';
+            const resultClass = isCompleted ? (game.resultWin ? 'win-badge' : 'loss-badge') : 'ongoing-badge';
+            const gameNote = gameNotes[game.gameNumber] || '';
+            const displayGameNote = gameNote || '点击添加备注';
+            const tiebreakTag = game.isTiebreak ? '<span class="tiebreak-badge-header" style="margin-left:8px;">抢七</span>' : '';
+            
+            let tableRows = '';
+            if (game.points.length === 0) {
+                tableRows = '<tr><td colspan="4" style="text-align:center; color:#aaa;">暂无得分</td></tr>';
+            } else {
+                for (let point of game.points) {
+                    const iconHtml = getPointIconHTML(point.id);
+                    const displayNote = point.note || '—';
+                    tableRows += `
+                        <tr>
+                            <td>${point.seq}</td>
+                            <td class="score-cell" data-point-id="${point.id}" style="cursor:pointer;">${iconHtml}</td>
+                            <td class="note-cell" data-point-id="${point.id}" title="点击编辑备注">${escapeHtml(displayNote)}</td>
+                            <td class="action-icons">
+                                <span class="action-icon" data-action="insert" data-point-id="${point.id}" title="在此前插入一分">➕</span>
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+
+            html += `
+                <div class="game-card">
+                    <div class="game-card-header">
+                        <span class="game-num">第 ${game.gameNumber} 局${tiebreakTag}</span>
+                        <div>
+                            <span class="game-score-badge">
+                                <span class="green">${game.finalGreen}</span> : <span class="red">${game.finalRed}</span>
+                            </span>
+                            <span class="game-result-badge ${resultClass}">${resultText}</span>
+                        </div>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table class="points-table">
+                            <thead><tr><th>#</th><th>得分</th><th>备注</th><th>插入</th></tr></thead>
+                            <tbody>${tableRows}</tbody>
+                        </table>
+                    </div>
+                    <div class="game-note-area" data-game-num="${game.gameNumber}">
+                        <span class="game-note-label">📝 局备注</span>
+                        <span class="game-note-text">${escapeHtml(displayGameNote)}</span>
+                        <span class="edit-icon">✎</span>
+                    </div>
+                </div>
+            `;
+        }
+        gamesGrid.innerHTML = html;
+        
+        drawAllScoreIcons();
+        
+        document.querySelectorAll('.score-cell').forEach(cell => {
+            cell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const pointId = parseInt(cell.getAttribute('data-point-id'));
+                if (pointId) showEditModal(pointId);
+            });
+        });
+        document.querySelectorAll('.note-cell').forEach(cell => {
+            cell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const pointId = parseInt(cell.getAttribute('data-point-id'));
+                if (pointId) editPointNote(pointId);
+            });
+        });
+        document.querySelectorAll('.action-icon[data-action="insert"]').forEach(icon => {
+            icon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const pointId = parseInt(icon.getAttribute('data-point-id'));
+                if (pointId) insertPointBefore(pointId);
+            });
+        });
+        document.querySelectorAll('.game-note-area').forEach(area => {
+            area.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const gameNum = parseInt(area.getAttribute('data-game-num'));
+                if (gameNum) editGameNote(gameNum);
+            });
+        });
+    }
+
+    function renderGameHistory() {
+        if (completedGames.length === 0) {
+            historyListDiv.innerHTML = '<div class="empty-message">暂无完赛局</div>';
+            return;
+        }
+        let historyHtml = '';
+        completedGames.forEach(game => {
+            const resultText = game.resultWin ? '胜局' : '负局';
+            const scoreText = `${game.finalGreen} : ${game.finalRed}`;
+            const borderClass = game.resultWin ? 'history-win' : 'history-loss';
+            historyHtml += `
+                <div class="history-item ${borderClass}">
+                    <div class="history-game-num">第 ${game.gameNumber} 局</div>
+                    <div class="history-score">${scoreText}</div>
+                    <div class="history-result">${resultText}</div>
+                </div>
+            `;
+        });
+        historyListDiv.innerHTML = historyHtml;
+    }
+
+    function renderAll() {
+        const gamesDetails = rebuildFromPoints();
+        renderGamesGrid(gamesDetails);
+        renderGameHistory();
+
+        totalGamesWonSpan.innerText = totalGamesWon;
+        totalGamesLostSpan.innerText = totalGamesLost;
+        currentGameNumSpan.innerText = currentGameNumber;
+        currentGreenSpan.innerText = currentGameGreen;
+        currentRedSpan.innerText = currentGameRed;
+        if (gamesDetails.length > 0 && gamesDetails[gamesDetails.length-1].isTiebreak && !gamesDetails[gamesDetails.length-1].resultWin) {
+            tiebreakIndicator.style.display = 'inline-block';
+        } else {
+            tiebreakIndicator.style.display = 'none';
+        }
+    }
+
+    function syncAllFromLog() {
+        renderAll();
+    }
+
+    function addPoint(color, satisfaction) {
+        globalPointId++;
+        const newPoint = {
+            id: globalPointId,
+            color: color,
+            satisfaction: satisfaction,
+            note: '',
+            tiebreak: nextIsTiebreak
+        };
+        pointsLog.push(newPoint);
+        if (nextIsTiebreak) {
+            nextIsTiebreak = false;
+        }
+        syncAllFromLog();
+    }
+
+    function undoLastPoint() {
+        if (pointsLog.length === 0) return;
+        pointsLog.pop();
+        if (pointsLog.length === 0) globalPointId = 0;
+        else globalPointId = Math.max(...pointsLog.map(p => p.id), 0);
+        syncAllFromLog();
+    }
+
+    function resetMatch() {
+        pointsLog = [];
+        globalPointId = 0;
+        gameNotes = {};
+        matchNote = "";
+        nextIsTiebreak = false;
+        updateMatchNoteDisplay();
+        syncAllFromLog();
+    }
+
+    function addNoteToLastPoint() {
+        if (pointsLog.length === 0) {
+            alert('暂无记录，请先记录一分再添加备注');
+            return;
+        }
+        const lastPoint = pointsLog[pointsLog.length - 1];
+        const newNote = prompt('请输入本条记录的备注（可留空）:', lastPoint.note || '');
+        if (newNote === null) return;
+        lastPoint.note = newNote.trim();
+        syncAllFromLog();
+    }
+
+    function buildIconButtons() {
+        const container = document.getElementById('iconButtonGrid');
+        if (!container) return;
+        const buttonsConfig = [
+            { color: 'green', satisfaction: 'check', svgPath: '<path d="M14 26 L22 34 L34 14" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>', bgClass: 'btn-green-bg', aria: '绿色对勾' },
+            { color: 'green', satisfaction: 'circle', svgPath: '<circle cx="24" cy="24" r="15" fill="white" stroke="none"/>', bgClass: 'btn-green-bg', aria: '绿色圆形' },
+            { color: 'green', satisfaction: 'cross', svgPath: '<line x1="14" y1="14" x2="34" y2="34" stroke="white" stroke-width="8" stroke-linecap="round"/><line x1="34" y1="14" x2="14" y2="34" stroke="white" stroke-width="8" stroke-linecap="round"/>', bgClass: 'btn-green-bg', aria: '绿色叉号' },
+            { color: 'red', satisfaction: 'check', svgPath: '<path d="M14 26 L22 34 L34 14" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>', bgClass: 'btn-red-bg', aria: '红色对勾' },
+            { color: 'red', satisfaction: 'circle', svgPath: '<circle cx="24" cy="24" r="15" fill="white" stroke="none"/>', bgClass: 'btn-red-bg', aria: '红色圆形' },
+            { color: 'red', satisfaction: 'cross', svgPath: '<line x1="14" y1="14" x2="34" y2="34" stroke="white" stroke-width="8" stroke-linecap="round"/><line x1="34" y1="14" x2="14" y2="34" stroke="white" stroke-width="8" stroke-linecap="round"/>', bgClass: 'btn-red-bg', aria: '红色叉号' }
+        ];
+        container.innerHTML = '';
+        buttonsConfig.forEach(cfg => {
+            const btn = document.createElement('button');
+            btn.className = `icon-btn ${cfg.bgClass}`;
+            btn.setAttribute('aria-label', cfg.aria);
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("class", "icon-svg-btn");
+            svg.setAttribute("viewBox", "0 0 48 48");
+            svg.setAttribute("fill", "none");
+            svg.innerHTML = cfg.svgPath;
+            btn.appendChild(svg);
+            const hiddenSpan = document.createElement('span');
+            hiddenSpan.className = 'visually-hidden';
+            hiddenSpan.innerText = `${cfg.color === 'green' ? '获胜分' : '丢分'}，满意度：${cfg.satisfaction === 'check' ? '对勾' : cfg.satisfaction === 'circle' ? '圆形' : '叉'}`;
+            btn.appendChild(hiddenSpan);
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                addPoint(cfg.color, cfg.satisfaction);
+            });
+            container.appendChild(btn);
+        });
+    }
+
+    function bindActions() {
+        undoBtn.addEventListener('click', undoLastPoint);
+        resetBtn.addEventListener('click', resetMatch);
+        tiebreakBtn.addEventListener('click', startTiebreak);
+        noteLastBtn.addEventListener('click', addNoteToLastPoint);
+        editMatchNoteBtn.addEventListener('click', editMatchNote);
+        saveBtn.addEventListener('click', saveCurrentMatch);
+        historySavesBtn.addEventListener('click', showHistoryModal);
+        exportBtn.addEventListener('click', exportToJSON);
+        importBtn.addEventListener('click', () => fileInput.click());
+        screenshotBtn.addEventListener('click', captureScreenshot);
+        matchNoteDisplay.addEventListener('click', editMatchNote);
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                importFromJSON(e.target.files[0]);
+                fileInput.value = '';
+            }
+        });
+    }
+
+    function init() {
+        buildIconButtons();
+        bindActions();
+        resetMatch();
+    }
+    init();
+</script>
+</body>
+</html>
